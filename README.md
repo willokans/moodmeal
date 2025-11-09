@@ -1,6 +1,6 @@
 # 🍽️ MoodMeal
 
-A simple and beautiful web application that recommends recipes based on your current mood! Built with Express, SQLite, and vanilla JavaScript with Tailwind CSS.
+A simple and beautiful web application that recommends recipes based on your current mood! Built with Express, PostgreSQL (Supabase), and vanilla JavaScript with Tailwind CSS.
 
 **Production-Ready Features**: User authentication, admin panel, recipe management, and comprehensive test coverage.
 
@@ -22,9 +22,9 @@ A simple and beautiful web application that recommends recipes based on your cur
 
 - **Backend**: Node.js + Express
 - **Authentication**: Express-session + Bcrypt
-- **Database**: SQLite3
+- **Database**: PostgreSQL (Supabase) - Cloud-hosted, scalable
 - **Frontend**: HTML, CSS (Tailwind), JavaScript
-- **No Build Tools**: Simple and straightforward setup
+- **Environment**: dotenv for configuration management
 
 ## Installation
 
@@ -35,6 +35,30 @@ A simple and beautiful web application that recommends recipes based on your cur
 ```bash
 npm install
 ```
+
+3. **Set up environment variables**:
+
+Create a `.env` file in the root directory:
+
+```bash
+# Create .env file
+touch .env
+```
+
+Add your Supabase PostgreSQL connection:
+
+```env
+NODE_ENV=development
+PORT=3000
+SESSION_SECRET=your-secret-key-change-in-production
+SESSION_MAX_AGE=86400000
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.jdirselycxxhduiohpvc.supabase.co:5432/postgres
+BCRYPT_ROUNDS=10
+```
+
+**Important**: Replace `YOUR_PASSWORD` with your actual Supabase database password!
+
+📖 **See [POSTGRESQL_SETUP.md](./POSTGRESQL_SETUP.md) for detailed setup instructions**
 
 ## Running the App
 
@@ -50,13 +74,13 @@ npm start
 http://localhost:3000
 ```
 
-That's it! The app will automatically:
+The app will automatically:
 
-- Create the SQLite database
-- Create the users table
-- Create a test account
-- Populate it with 26 mood-based recipes
-- Serve the frontend
+- ✅ Connect to your PostgreSQL database (Supabase)
+- ✅ Create the necessary tables
+- ✅ Create default test accounts
+- ✅ Populate with 26 mood-based recipes (if empty)
+- ✅ Serve the frontend
 
 ## Running Tests
 
@@ -132,11 +156,11 @@ Admin User:
 
 ## Database
 
-The app uses SQLite with the following schema:
+The app uses **PostgreSQL (hosted on Supabase)** with the following schema:
 
 - **recipes** table:
 
-  - id (INTEGER PRIMARY KEY)
+  - id (SERIAL PRIMARY KEY)
   - name (TEXT)
   - mood (TEXT)
   - ingredients (TEXT)
@@ -147,17 +171,26 @@ The app uses SQLite with the following schema:
   - active (INTEGER, 1=active, 0=inactive)
 
 - **users** table:
-  - id (INTEGER PRIMARY KEY)
+  - id (SERIAL PRIMARY KEY)
   - email (TEXT UNIQUE)
   - password (TEXT - bcrypt hashed)
-  - created_at (DATETIME)
+  - is_admin (INTEGER, 1=admin, 0=regular user)
+  - created_at (TIMESTAMP)
 
-The database comes pre-populated with:
+The database is automatically initialized with:
 
 - 26 unique recipes (5+ per mood)
 - 2 test accounts:
   - Regular user: test@user.com / test
   - Admin user: admin@user.com / admin
+
+### Why PostgreSQL?
+
+- ☁️ **Cloud-hosted**: No local database file to manage
+- 🚀 **Scalable**: Ready for production and horizontal scaling
+- 🔄 **Multi-environment**: Easy to set up dev, staging, and production
+- 💪 **Production-ready**: Built for high concurrency and reliability
+- 🔒 **Automated backups**: Supabase handles backups automatically
 
 ## API Endpoints
 
@@ -187,24 +220,27 @@ The database comes pre-populated with:
 
 ```
 moodmeal/
-├── server.js           # Express server and API routes
-├── package.json        # Dependencies and scripts
-├── recipes.db          # SQLite database (created automatically)
+├── server.js                    # Express server and API routes (PostgreSQL)
+├── package.json                 # Dependencies and scripts
+├── .env                         # Environment variables (create this!)
+├── POSTGRESQL_SETUP.md          # PostgreSQL setup guide
+├── DEPLOYMENT.md                # Production deployment guide
+├── QUICK_START.md               # Quick start guide
 ├── public/
-│   ├── index.html     # Main app HTML
-│   ├── app.js         # Main app JavaScript
-│   ├── login.html     # Login page HTML
-│   ├── login.js       # Login page JavaScript
-│   ├── admin.html     # Admin configuration page HTML
-│   └── admin.js       # Admin page JavaScript
-├── tests/              # Unit tests
-│   ├── auth.test.js        # Authentication tests
-│   ├── recipes.test.js     # Recipe CRUD tests
-│   ├── users.test.js       # User management tests
-│   ├── toggle.test.js      # Active/inactive toggle tests
-│   ├── integration.test.js # Integration tests
-│   └── README.md           # Test documentation
-└── README.md          # This file
+│   ├── index.html              # Main app HTML
+│   ├── app.js                  # Main app JavaScript
+│   ├── login.html              # Login page HTML
+│   ├── login.js                # Login page JavaScript
+│   ├── admin.html              # Admin configuration page HTML
+│   └── admin.js                # Admin page JavaScript
+├── tests/                       # Unit tests
+│   ├── auth.test.js            # Authentication tests
+│   ├── recipes.test.js         # Recipe CRUD tests
+│   ├── users.test.js           # User management tests
+│   ├── toggle.test.js          # Active/inactive toggle tests
+│   ├── integration.test.js     # Integration tests
+│   └── README.md               # Test documentation
+└── README.md                   # This file
 ```
 
 ## Customization

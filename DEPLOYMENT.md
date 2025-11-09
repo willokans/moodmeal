@@ -274,40 +274,41 @@ heroku open
 
 ## Database Considerations
 
-### For Production with SQLite
+### PostgreSQL (Supabase) for Production
 
-**Pros:**
-- Zero configuration
-- File-based, easy backups
-- Good for small to medium traffic
+This app uses **PostgreSQL with Supabase** - a cloud-hosted, production-ready database solution.
+
+**Benefits:**
+- ✅ Zero infrastructure management
+- ✅ Automatic backups and point-in-time recovery
+- ✅ High availability and reliability
+- ✅ Excellent concurrency and ACID compliance
+- ✅ Built-in monitoring and logging
+- ✅ Easy scaling (vertical and horizontal)
+- ✅ Multi-environment support
 
 **Setup:**
+
+1. **Set up environment variables:**
 ```bash
-# Regular backups
-0 2 * * * cp /path/to/moodmeal/recipes.db /path/to/backups/recipes-$(date +\%Y\%m\%d).db
+# In your .env file or deployment environment
+DATABASE_URL=postgresql://postgres:password@db.project.supabase.co:5432/postgres
+NODE_ENV=production
+SESSION_SECRET=your-strong-secret-key
 ```
 
-### Migrating to PostgreSQL (Recommended for Production)
+2. **Connection pooling** is already configured in the app
 
-**Why PostgreSQL?**
-- Better concurrency
-- ACID compliance
-- Scalability
-- Better for production workloads
+3. **Backups** are automatic via Supabase (point-in-time recovery available)
 
-**Migration Steps:**
+### Multiple Environments
 
-1. Install dependencies:
-```bash
-npm install pg --save
-```
+Create separate Supabase projects for:
+- **Development**: dev.supabase.co
+- **Staging**: staging.supabase.co  
+- **Production**: prod.supabase.co
 
-2. Update server.js to use PostgreSQL adapter
-
-3. Set DATABASE_URL in environment:
-```bash
-DATABASE_URL=postgresql://user:password@host:port/database
-```
+Use different `DATABASE_URL` values for each environment.
 
 ## Monitoring and Logging
 
@@ -456,12 +457,17 @@ npm install
 ### Database Errors
 
 ```bash
-# Check database file permissions
-ls -la recipes.db
+# Test PostgreSQL connection
+psql "$DATABASE_URL" -c "SELECT version();"
 
-# Verify database integrity
-sqlite3 recipes.db "PRAGMA integrity_check;"
+# Check if app can connect
+node -e "require('dotenv').config(); const { Pool } = require('pg'); const pool = new Pool({connectionString: process.env.DATABASE_URL, ssl: {rejectUnauthorized: false}}); pool.query('SELECT NOW()').then(() => console.log('✅ Connected')).catch(e => console.error('❌ Error:', e.message)).finally(() => pool.end());"
 ```
+
+**Common database issues:**
+- Connection timeout: Check internet and Supabase status
+- Authentication failed: Verify password in `DATABASE_URL`
+- Too many connections: Use connection pooling (already configured)
 
 ### Session Issues
 

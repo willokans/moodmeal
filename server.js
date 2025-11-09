@@ -1,162 +1,120 @@
+require("dotenv").config();
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
+const { Pool } = require("pg");
 const cors = require("cors");
 const path = require("path");
 const session = require("express-session");
 const bcrypt = require("bcrypt");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+// PostgreSQL connection pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(
   session({
-    secret: "mood-recipe-secret-key-2024",
+    secret: process.env.SESSION_SECRET || "mood-recipe-secret-key-2024",
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }, // 24 hours
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      maxAge: parseInt(process.env.SESSION_MAX_AGE) || 24 * 60 * 60 * 1000,
+    },
   })
 );
 app.use(express.static("public"));
 
-// Initialize SQLite database
-const db = new sqlite3.Database("./recipes.db", (err) => {
+// Test PostgreSQL connection and initialize database
+pool.connect((err, client, release) => {
   if (err) {
-    console.error("Error opening database:", err);
+    console.error("Error connecting to PostgreSQL database:", err.stack);
+    process.exit(1);
   } else {
-    console.log("Connected to SQLite database");
+    console.log("Connected to PostgreSQL database (Supabase)");
+    release();
     initializeDatabase();
   }
 });
 
 // Create tables and populate with sample data
-function initializeDatabase() {
-  // Create recipes table
-  db.run(
-    `CREATE TABLE IF NOT EXISTS recipes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    mood TEXT NOT NULL,
-    ingredients TEXT NOT NULL,
-    instructions TEXT NOT NULL,
-    prepTime TEXT NOT NULL,
-    servings INTEGER NOT NULL,
-    image TEXT,
-    active INTEGER DEFAULT 1
-  )`,
-    (err) => {
-      if (err) {
-        console.error("Error creating table:", err);
-      } else {
-        // Check if active column exists, if not add it
-        db.all("PRAGMA table_info(recipes)", (err, columns) => {
-          const hasActiveColumn = columns.some((col) => col.name === "active");
+async function initializeDatabase() {
+  try {
+    // Create recipes table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS recipes (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        mood TEXT NOT NULL,
+        ingredients TEXT NOT NULL,
+        instructions TEXT NOT NULL,
+        prepTime TEXT NOT NULL,
+        servings INTEGER NOT NULL,
+        image TEXT,
+        active INTEGER DEFAULT 1
+      )
+    `);
+    console.log("Recipes table ready");
 
-          if (!hasActiveColumn) {
-            db.run(
-              "ALTER TABLE recipes ADD COLUMN active INTEGER DEFAULT 1",
-              (err) => {
-                if (err) {
-                  console.error("Error adding active column:", err);
-                } else {
-                  console.log("Active column added to recipes table");
-                  // Set all existing recipes to active
-                  db.run("UPDATE recipes SET active = 1 WHERE active IS NULL");
-                }
-              }
-            );
-          }
-        });
-
-        // Check if we need to populate
-        db.get("SELECT COUNT(*) as count FROM recipes", (err, row) => {
-          if (row.count === 0) {
-            populateRecipes();
-          }
-        });
-      }
+    // Check if we need to populate recipes
+    const recipeCount = await pool.query(
+      "SELECT COUNT(*) as count FROM recipes"
+    );
+    if (parseInt(recipeCount.rows[0].count) === 0) {
+      await populateRecipes();
     }
-  );
 
-  // Create users table
-  db.run(
-    `CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    is_admin INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`,
-    (err) => {
-      if (err) {
-        console.error("Error creating users table:", err);
-      } else {
-        // Check if test user exists, if not create it
-        db.get(
-          "SELECT * FROM users WHERE email = ?",
-          ["test@user.com"],
-          (err, row) => {
-            if (!row) {
-              // Create test user with hashed password
-              bcrypt.hash("test", 10, (err, hash) => {
-                if (err) {
-                  console.error("Error hashing password:", err);
-                } else {
-                  db.run(
-                    "INSERT INTO users (email, password, is_admin) VALUES (?, ?, ?)",
-                    ["test@user.com", hash, 0],
-                    (err) => {
-                      if (err) {
-                        console.error("Error creating test user:", err);
-                      } else {
-                        console.log("Test user created: test@user.com / test");
-                      }
-                    }
-                  );
-                }
-              });
-            }
-          }
-        );
+    // Create users table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        is_admin INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("Users table ready");
 
-        // Check if admin user exists, if not create it
-        db.get(
-          "SELECT * FROM users WHERE email = ?",
-          ["admin@user.com"],
-          (err, row) => {
-            if (!row) {
-              // Create admin user with hashed password
-              bcrypt.hash("admin", 10, (err, hash) => {
-                if (err) {
-                  console.error("Error hashing password:", err);
-                } else {
-                  db.run(
-                    "INSERT INTO users (email, password, is_admin) VALUES (?, ?, ?)",
-                    ["admin@user.com", hash, 1],
-                    (err) => {
-                      if (err) {
-                        console.error("Error creating admin user:", err);
-                      } else {
-                        console.log(
-                          "Admin user created: admin@user.com / admin"
-                        );
-                      }
-                    }
-                  );
-                }
-              });
-            }
-          }
-        );
-      }
+    // Check if test user exists, if not create it
+    const testUser = await pool.query("SELECT * FROM users WHERE email = $1", [
+      "test@user.com",
+    ]);
+
+    if (testUser.rows.length === 0) {
+      const hash = await bcrypt.hash("test", 10);
+      await pool.query(
+        "INSERT INTO users (email, password, is_admin) VALUES ($1, $2, $3)",
+        ["test@user.com", hash, 0]
+      );
+      console.log("Test user created: test@user.com / test");
     }
-  );
+
+    // Check if admin user exists, if not create it
+    const adminUser = await pool.query("SELECT * FROM users WHERE email = $1", [
+      "admin@user.com",
+    ]);
+
+    if (adminUser.rows.length === 0) {
+      const hash = await bcrypt.hash("admin", 10);
+      await pool.query(
+        "INSERT INTO users (email, password, is_admin) VALUES ($1, $2, $3)",
+        ["admin@user.com", hash, 1]
+      );
+      console.log("Admin user created: admin@user.com / admin");
+    }
+  } catch (err) {
+    console.error("Error initializing database:", err);
+  }
 }
 
 // Populate database with mood-based recipes
-function populateRecipes() {
+async function populateRecipes() {
   const recipes = [
     // Happy mood recipes
     {
@@ -455,24 +413,25 @@ function populateRecipes() {
     },
   ];
 
-  const stmt = db.prepare(
-    "INSERT INTO recipes (name, mood, ingredients, instructions, prepTime, servings, image) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  );
-
-  recipes.forEach((recipe) => {
-    stmt.run(
-      recipe.name,
-      recipe.mood,
-      recipe.ingredients,
-      recipe.instructions,
-      recipe.prepTime,
-      recipe.servings,
-      recipe.image
-    );
-  });
-
-  stmt.finalize();
-  console.log("Database populated with recipes");
+  try {
+    for (const recipe of recipes) {
+      await pool.query(
+        "INSERT INTO recipes (name, mood, ingredients, instructions, prepTime, servings, image) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [
+          recipe.name,
+          recipe.mood,
+          recipe.ingredients,
+          recipe.instructions,
+          recipe.prepTime,
+          recipe.servings,
+          recipe.image,
+        ]
+      );
+    }
+    console.log("Database populated with recipes");
+  } catch (err) {
+    console.error("Error populating recipes:", err);
+  }
 }
 
 // Authentication Middleware
@@ -496,41 +455,41 @@ function requireAdmin(req, res, next) {
 // Authentication Routes
 
 // Login endpoint
-app.post("/api/login", (req, res) => {
+app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: "Email and password are required" });
   }
 
-  db.get("SELECT * FROM users WHERE email = ?", [email], (err, user) => {
-    if (err) {
-      return res.status(500).json({ error: "Database error" });
-    }
+  try {
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
 
-    if (!user) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    bcrypt.compare(password, user.password, (err, match) => {
-      if (err) {
-        return res.status(500).json({ error: "Authentication error" });
-      }
+    const user = result.rows[0];
+    const match = await bcrypt.compare(password, user.password);
 
-      if (match) {
-        req.session.userId = user.id;
-        req.session.userEmail = user.email;
-        req.session.isAdmin = user.is_admin === 1;
-        res.json({
-          success: true,
-          email: user.email,
-          isAdmin: user.is_admin === 1,
-        });
-      } else {
-        res.status(401).json({ error: "Invalid email or password" });
-      }
-    });
-  });
+    if (match) {
+      req.session.userId = user.id;
+      req.session.userEmail = user.email;
+      req.session.isAdmin = user.is_admin === 1;
+      res.json({
+        success: true,
+        email: user.email,
+        isAdmin: user.is_admin === 1,
+      });
+    } else {
+      res.status(401).json({ error: "Invalid email or password" });
+    }
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
 });
 
 // Logout endpoint
@@ -559,18 +518,20 @@ app.get("/api/auth/status", (req, res) => {
 // Admin Routes
 
 // Get all recipes (admin only)
-app.get("/api/admin/recipes", requireAdmin, (req, res) => {
-  db.all("SELECT * FROM recipes ORDER BY mood, name", (err, rows) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    res.json(rows);
-  });
+app.get("/api/admin/recipes", requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM recipes ORDER BY mood, name"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching recipes:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Create new recipe (admin only)
-app.post("/api/admin/recipes", requireAdmin, (req, res) => {
+app.post("/api/admin/recipes", requireAdmin, async (req, res) => {
   const { name, mood, ingredients, instructions, prepTime, servings, image } =
     req.body;
 
@@ -585,43 +546,43 @@ app.post("/api/admin/recipes", requireAdmin, (req, res) => {
     return res.status(400).json({ error: "All fields are required" });
   }
 
-  db.run(
-    "INSERT INTO recipes (name, mood, ingredients, instructions, prepTime, servings, image, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    [
-      name,
-      mood,
-      ingredients,
-      instructions,
-      prepTime,
-      servings,
-      image || "🍽️",
-      1,
-    ],
-    function (err) {
-      if (err) {
-        return res.status(500).json({ error: "Error creating recipe" });
-      }
+  try {
+    const result = await pool.query(
+      "INSERT INTO recipes (name, mood, ingredients, instructions, prepTime, servings, image, active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+      [
+        name,
+        mood,
+        ingredients,
+        instructions,
+        prepTime,
+        servings,
+        image || "🍽️",
+        1,
+      ]
+    );
 
-      res.json({
-        success: true,
-        recipe: {
-          id: this.lastID,
-          name,
-          mood,
-          ingredients,
-          instructions,
-          prepTime,
-          servings,
-          image: image || "🍽️",
-          active: 1,
-        },
-      });
-    }
-  );
+    res.json({
+      success: true,
+      recipe: {
+        id: result.rows[0].id,
+        name,
+        mood,
+        ingredients,
+        instructions,
+        prepTime,
+        servings,
+        image: image || "🍽️",
+        active: 1,
+      },
+    });
+  } catch (err) {
+    console.error("Error creating recipe:", err);
+    res.status(500).json({ error: "Error creating recipe" });
+  }
 });
 
 // Update recipe (admin only)
-app.put("/api/admin/recipes/:id", requireAdmin, (req, res) => {
+app.put("/api/admin/recipes/:id", requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { name, mood, ingredients, instructions, prepTime, servings, image } =
     req.body;
@@ -637,187 +598,176 @@ app.put("/api/admin/recipes/:id", requireAdmin, (req, res) => {
     return res.status(400).json({ error: "All fields are required" });
   }
 
-  db.run(
-    "UPDATE recipes SET name = ?, mood = ?, ingredients = ?, instructions = ?, prepTime = ?, servings = ?, image = ? WHERE id = ?",
-    [
-      name,
-      mood,
-      ingredients,
-      instructions,
-      prepTime,
-      servings,
-      image || "🍽️",
-      id,
-    ],
-    function (err) {
-      if (err) {
-        return res.status(500).json({ error: "Error updating recipe" });
-      }
+  try {
+    const result = await pool.query(
+      "UPDATE recipes SET name = $1, mood = $2, ingredients = $3, instructions = $4, prepTime = $5, servings = $6, image = $7 WHERE id = $8",
+      [
+        name,
+        mood,
+        ingredients,
+        instructions,
+        prepTime,
+        servings,
+        image || "🍽️",
+        id,
+      ]
+    );
 
-      if (this.changes === 0) {
-        return res.status(404).json({ error: "Recipe not found" });
-      }
-
-      res.json({
-        success: true,
-        recipe: {
-          id: parseInt(id),
-          name,
-          mood,
-          ingredients,
-          instructions,
-          prepTime,
-          servings,
-          image: image || "🍽️",
-        },
-      });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Recipe not found" });
     }
-  );
+
+    res.json({
+      success: true,
+      recipe: {
+        id: parseInt(id),
+        name,
+        mood,
+        ingredients,
+        instructions,
+        prepTime,
+        servings,
+        image: image || "🍽️",
+      },
+    });
+  } catch (err) {
+    console.error("Error updating recipe:", err);
+    res.status(500).json({ error: "Error updating recipe" });
+  }
 });
 
 // Toggle recipe active status (admin only)
-app.patch("/api/admin/recipes/:id/toggle", requireAdmin, (req, res) => {
+app.patch("/api/admin/recipes/:id/toggle", requireAdmin, async (req, res) => {
   const { id } = req.params;
 
-  // First get the current status
-  db.get("SELECT active FROM recipes WHERE id = ?", [id], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: "Error fetching recipe" });
-    }
+  try {
+    // First get the current status
+    const result = await pool.query(
+      "SELECT active FROM recipes WHERE id = $1",
+      [id]
+    );
 
-    if (!row) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "Recipe not found" });
     }
 
     // Toggle the status
-    const newStatus = row.active === 1 ? 0 : 1;
+    const newStatus = result.rows[0].active === 1 ? 0 : 1;
 
-    db.run(
-      "UPDATE recipes SET active = ? WHERE id = ?",
-      [newStatus, id],
-      function (err) {
-        if (err) {
-          return res.status(500).json({ error: "Error updating recipe" });
-        }
+    await pool.query("UPDATE recipes SET active = $1 WHERE id = $2", [
+      newStatus,
+      id,
+    ]);
 
-        res.json({
-          success: true,
-          active: newStatus,
-          message: `Recipe ${
-            newStatus === 1 ? "activated" : "deactivated"
-          } successfully`,
-        });
-      }
-    );
-  });
+    res.json({
+      success: true,
+      active: newStatus,
+      message: `Recipe ${
+        newStatus === 1 ? "activated" : "deactivated"
+      } successfully`,
+    });
+  } catch (err) {
+    console.error("Error toggling recipe:", err);
+    res.status(500).json({ error: "Error updating recipe" });
+  }
 });
 
 // Create new user (admin only)
-app.post("/api/admin/users", requireAdmin, (req, res) => {
+app.post("/api/admin/users", requireAdmin, async (req, res) => {
   const { email, password, isAdmin } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: "Email and password are required" });
   }
 
-  // Check if user already exists
-  db.get(
-    "SELECT * FROM users WHERE email = ?",
-    [email],
-    (err, existingUser) => {
-      if (err) {
-        return res.status(500).json({ error: "Database error" });
-      }
+  try {
+    // Check if user already exists
+    const existingUser = await pool.query(
+      "SELECT * FROM users WHERE email = $1",
+      [email]
+    );
 
-      if (existingUser) {
-        return res
-          .status(400)
-          .json({ error: "User with this email already exists" });
-      }
-
-      // Hash password and create user
-      bcrypt.hash(password, 10, (err, hash) => {
-        if (err) {
-          return res.status(500).json({ error: "Error creating user" });
-        }
-
-        db.run(
-          "INSERT INTO users (email, password, is_admin) VALUES (?, ?, ?)",
-          [email, hash, isAdmin ? 1 : 0],
-          function (err) {
-            if (err) {
-              return res.status(500).json({ error: "Error creating user" });
-            }
-
-            res.json({
-              success: true,
-              user: {
-                id: this.lastID,
-                email: email,
-                isAdmin: isAdmin ? true : false,
-              },
-            });
-          }
-        );
-      });
+    if (existingUser.rows.length > 0) {
+      return res
+        .status(400)
+        .json({ error: "User with this email already exists" });
     }
-  );
+
+    // Hash password and create user
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      "INSERT INTO users (email, password, is_admin) VALUES ($1, $2, $3) RETURNING id",
+      [email, hash, isAdmin ? 1 : 0]
+    );
+
+    res.json({
+      success: true,
+      user: {
+        id: result.rows[0].id,
+        email: email,
+        isAdmin: isAdmin ? true : false,
+      },
+    });
+  } catch (err) {
+    console.error("Error creating user:", err);
+    res.status(500).json({ error: "Error creating user" });
+  }
 });
 
 // Get all users (admin only)
-app.get("/api/admin/users", requireAdmin, (req, res) => {
-  db.all(
-    "SELECT id, email, is_admin, created_at FROM users ORDER BY created_at DESC",
-    (err, rows) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      res.json(
-        rows.map((user) => ({
-          ...user,
-          isAdmin: user.is_admin === 1,
-        }))
-      );
-    }
-  );
+app.get("/api/admin/users", requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, email, is_admin, created_at FROM users ORDER BY created_at DESC"
+    );
+    res.json(
+      result.rows.map((user) => ({
+        ...user,
+        isAdmin: user.is_admin === 1,
+      }))
+    );
+  } catch (err) {
+    console.error("Error fetching users:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // API Routes (Protected)
 
 // Get a random recipe by mood (only active recipes)
-app.get("/api/recipes/:mood", requireAuth, (req, res) => {
+app.get("/api/recipes/:mood", requireAuth, async (req, res) => {
   const mood = req.params.mood;
 
-  db.all(
-    "SELECT * FROM recipes WHERE mood = ? AND active = 1 ORDER BY RANDOM()",
-    [mood],
-    (err, rows) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
+  try {
+    const result = await pool.query(
+      "SELECT * FROM recipes WHERE mood = $1 AND active = 1 ORDER BY RANDOM() LIMIT 1",
+      [mood]
+    );
 
-      if (rows.length === 0) {
-        res.status(404).json({ error: "No recipes found for this mood" });
-        return;
-      }
-
-      // Return the first random recipe
-      res.json(rows[0]);
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "No recipes found for this mood" });
+      return;
     }
-  );
+
+    // Return the random recipe
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Error fetching recipe:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Get all available moods (only from active recipes)
-app.get("/api/moods", requireAuth, (req, res) => {
-  db.all("SELECT DISTINCT mood FROM recipes WHERE active = 1", (err, rows) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    res.json(rows.map((row) => row.mood));
-  });
+app.get("/api/moods", requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT DISTINCT mood FROM recipes WHERE active = 1"
+    );
+    res.json(result.rows.map((row) => row.mood));
+  } catch (err) {
+    console.error("Error fetching moods:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Serve login page
@@ -851,12 +801,13 @@ app.listen(PORT, () => {
 });
 
 // Graceful shutdown
-process.on("SIGINT", () => {
-  db.close((err) => {
-    if (err) {
-      console.error(err.message);
-    }
-    console.log("Database connection closed");
+process.on("SIGINT", async () => {
+  try {
+    await pool.end();
+    console.log("Database connection pool closed");
     process.exit(0);
-  });
+  } catch (err) {
+    console.error("Error closing database connection:", err.message);
+    process.exit(1);
+  }
 });

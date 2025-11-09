@@ -37,8 +37,9 @@
 
 ### Technical Stack
 - **Backend**: Express.js 4.18.2
-- **Database**: SQLite3 5.1.6
+- **Database**: PostgreSQL (pg 8.16.3) with Supabase
 - **Authentication**: bcrypt 5.1.1 + express-session 1.17.3
+- **Configuration**: dotenv 17.2.3
 - **Frontend**: Vanilla JavaScript + Tailwind CSS
 - **Testing**: Jest 29.7.0 + Supertest 6.3.4
 
