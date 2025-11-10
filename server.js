@@ -370,7 +370,7 @@ async function populateRecipes() {
       name: "Tuscan White Bean Soup",
       mood: "relaxed",
       ingredients:
-        "Cannellini beans, Kale, Garlic, Rosemary, Thyme, Vegetable broth, Parmesan rind, Olive oil, Crusty bread",
+        "Cannellini beans, Kale, Garlic, Rosemary uhmmm, Thyme, Vegetable broth, Parmesan rind, Olive oil, Crusty bread",
       instructions:
         "1. Sauté garlic and herbs in olive oil. 2. Add beans and broth with parmesan rind. 3. Simmer 30 minutes. 4. Stir in chopped kale until wilted. 5. Serve with crusty bread and good olive oil.",
       prepTime: "45 minutes",
