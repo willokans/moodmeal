@@ -1,0 +1,14 @@
+apiVersion: v2
+name: moodmeal
+description: A Helm chart for MoodMeal - mood-based recipe recommendation app
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - recipe
+  - mood
+  - postgresql
+  - supabase
+maintainers:
+  - name: MoodMeal Team
+

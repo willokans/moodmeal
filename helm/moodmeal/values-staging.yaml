@@ -1,0 +1,32 @@
+# Staging environment values
+replicaCount: 2
+
+image:
+  repository: gcr.io/PROJECT_ID/moodmeal
+  tag: "staging"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+env:
+  NODE_ENV: staging
+  PORT: "3000"
+
+ingress:
+  enabled: true
+  hosts:
+    - host: moodmeal-staging.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+

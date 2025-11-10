@@ -1,0 +1,42 @@
+# Production environment values
+replicaCount: 3
+
+image:
+  repository: gcr.io/PROJECT_ID/moodmeal
+  tag: "latest"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+env:
+  NODE_ENV: production
+  PORT: "3000"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: moodmeal.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: moodmeal-tls
+      hosts:
+        - moodmeal.example.com
+

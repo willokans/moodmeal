@@ -2,4 +2,40 @@ node_modules/
 recipes.db
 .DS_Store
 *.log
+server*.log
+*.db
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docker
+.dockerignore
+
+# Kubernetes secrets (never commit!)
+*-secrets.yaml
+*-secret.yaml
+jenkins-sa-key.json
+gcp-key.json
+
+# Coverage
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.tgz
 

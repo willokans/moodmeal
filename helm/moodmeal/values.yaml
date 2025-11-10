@@ -1,0 +1,110 @@
+# Default values for moodmeal
+# This is a YAML-formatted file.
+
+replicaCount: 2
+
+image:
+  repository: gcr.io/PROJECT_ID/moodmeal
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: moodmeal.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: moodmeal-tls
+  #    hosts:
+  #      - moodmeal.local
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Environment variables
+env:
+  NODE_ENV: production
+  PORT: "3000"
+  SESSION_MAX_AGE: "86400000"
+  BCRYPT_ROUNDS: "10"
+
+# Database connection (from secret)
+database:
+  urlSecretName: moodmeal-db-secret
+  urlSecretKey: database-url
+
+# Session secret (from secret)
+session:
+  secretName: moodmeal-secrets
+  secretKey: session-secret
+
+# Health check
+livenessProbe:
+  httpGet:
+    path: /api/auth/status
+    port: 3000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/auth/status
+    port: 3000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+

@@ -1,0 +1,30 @@
+# Development environment values
+replicaCount: 1
+
+image:
+  repository: gcr.io/PROJECT_ID/moodmeal
+  tag: "dev"
+
+autoscaling:
+  enabled: false
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+env:
+  NODE_ENV: development
+  PORT: "3000"
+
+ingress:
+  enabled: true
+  hosts:
+    - host: moodmeal-dev.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
