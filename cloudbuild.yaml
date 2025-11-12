@@ -30,14 +30,28 @@ steps:
   
   # Deploy to App Engine
   - name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: 'gcloud'
+    entrypoint: 'bash'
     args:
-      - 'app'
-      - 'deploy'
-      - 'app.yaml'
-      - '--image-url=gcr.io/$PROJECT_ID/moodmeal:$COMMIT_SHA'
-      - '--version=$COMMIT_SHA'
-      - '--quiet'
+      - '-c'
+      - |
+        # Retry deployment up to 3 times
+        for i in 1 2 3; do
+          echo "Deployment attempt $i of 3..."
+          if gcloud app deploy app.yaml \
+            --image-url=gcr.io/$PROJECT_ID/moodmeal:$COMMIT_SHA \
+            --version=$COMMIT_SHA \
+            --quiet; then
+            echo "Deployment successful!"
+            exit 0
+          else
+            echo "Deployment attempt $i failed, waiting 30 seconds..."
+            if [ $i -lt 3 ]; then
+              sleep 30
+            fi
+          fi
+        done
+        echo "All deployment attempts failed"
+        exit 1
 
 # Images to be pushed to the Container Registry
 images:
