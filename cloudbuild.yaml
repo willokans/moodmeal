@@ -27,6 +27,17 @@ steps:
       - 'push'
       - '--all-tags'
       - 'gcr.io/$PROJECT_ID/moodmeal'
+  
+  # Deploy to App Engine
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'gcloud'
+    args:
+      - 'app'
+      - 'deploy'
+      - 'app.yaml'
+      - '--image-url=gcr.io/$PROJECT_ID/moodmeal:$COMMIT_SHA'
+      - '--version=$COMMIT_SHA'
+      - '--quiet'
 
 # Images to be pushed to the Container Registry
 images:
