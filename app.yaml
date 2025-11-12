@@ -14,9 +14,9 @@ resources:
   memory_gb: 0.5
   disk_size_gb: 10
 
-# Health check
+# Health check - use root path for better compatibility
 readiness_check:
-  path: "/api/auth/status"
+  path: "/"
   check_interval_sec: 5
   timeout_sec: 4
   failure_threshold: 2
