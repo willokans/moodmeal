@@ -30,12 +30,12 @@ liveness_check:
   failure_threshold: 4
   success_threshold: 2
 
-# Environment variables (set these in App Engine settings or via gcloud)
+# Environment variables
 env_variables:
   NODE_ENV: production
-  PORT: 8080
-
-# Note: DATABASE_URL and SESSION_SECRET should be set via:
-# gcloud app deploy --set-env-vars DATABASE_URL=...,SESSION_SECRET=...
-# Or in App Engine Console → Settings → Environment Variables
+  PORT: "8080"
+  DATABASE_URL: "postgresql://postgres.jdirselycxxhduiohpvc:WQ%24mephw%25L62VtN@aws-1-eu-north-1.pooler.supabase.com:5432/postgres"
+  SESSION_SECRET: "p+iAptpbAqsw8xJxX6gp1ozS7J866HmqqTv2FrOUJGg="
+  SESSION_MAX_AGE: "86400000"
+  BCRYPT_ROUNDS: "10"
 
