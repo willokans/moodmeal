@@ -31,9 +31,9 @@ liveness_check:
   success_threshold: 2
 
 # Environment variables
+# Note: PORT is automatically set by App Engine - do not set it here
 env_variables:
   NODE_ENV: production
-  PORT: "8080"
   DATABASE_URL: "postgresql://postgres.jdirselycxxhduiohpvc:WQ%24mephw%25L62VtN@aws-1-eu-north-1.pooler.supabase.com:5432/postgres"
   SESSION_SECRET: "p+iAptpbAqsw8xJxX6gp1ozS7J866HmqqTv2FrOUJGg="
   SESSION_MAX_AGE: "86400000"
