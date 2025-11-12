@@ -1,0 +1,63 @@
+steps:
+  # Install dependencies
+  - name: 'node:18'
+    entrypoint: 'npm'
+    args: ['ci']
+    
+  # Run tests
+  - name: 'node:18'
+    entrypoint: 'npm'
+    args: ['test']
+    
+  # Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/moodmeal:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/moodmeal:latest'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/moodmeal:$BRANCH_NAME'
+      - '.'
+    
+  # Push Docker image to GCR
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'gcr.io/$PROJECT_ID/moodmeal'
+  
+  # Deploy to Cloud Run (much more reliable than App Engine)
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'moodmeal'
+      - '--image=gcr.io/$PROJECT_ID/moodmeal:$COMMIT_SHA'
+      - '--platform=managed'
+      - '--region=us-central1'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'DATABASE_URL=$$DATABASE_URL,SESSION_SECRET=$$SESSION_SECRET,NODE_ENV=production,SESSION_MAX_AGE=86400000,BCRYPT_ROUNDS=10'
+      - '--quiet'
+
+# Images to be pushed to the Container Registry
+images:
+  - 'gcr.io/$PROJECT_ID/moodmeal:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/moodmeal:latest'
+  - 'gcr.io/$PROJECT_ID/moodmeal:$BRANCH_NAME'
+
+# Build options
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# Timeout for the entire build
+timeout: '1200s'
+
+# Substitution variables - set these in Cloud Build trigger settings
+substitutions:
+  DATABASE_URL: 'postgresql://postgres.jdirselycxxhduiohpvc:WQ%24mephw%25L62VtN@aws-1-eu-north-1.pooler.supabase.com:5432/postgres'
+  SESSION_SECRET: 'p+iAptpbAqsw8xJxX6gp1ozS7J866HmqqTv2FrOUJGg='
+
