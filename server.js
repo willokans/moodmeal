@@ -367,7 +367,7 @@ async function populateRecipes() {
       image: "🧘🥗",
     },
     {
-      name: "Tuscan White Bean Soup",
+      name: "Tuscan White Bean Soup- testing gcp triggers",
       mood: "relaxed",
       ingredients:
         "Cannellini beans, Kale, Garlic, Rosemary uhmmm, Thyme, Vegetable broth, Parmesan rind, Olive oil, Crusty bread",
